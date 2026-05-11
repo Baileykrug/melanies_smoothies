@@ -1,36 +1,45 @@
 import streamlit as st
 from snowflake.snowpark.functions import col
 
-# Write directly to the app.
-st.title(f":cup_with_straw: Customize Your Smoothie! :cup_with_straw:")
-st.write(
-  """Choose the fruits you want in your custom smoothie!
-  """
+st.title(":cup_with_straw: Customize Your Smoothie! :cup_with_straw:")
+st.write("Choose the fruits you want in your custom smoothie!")
+
+# User input
+name_on_order = st.text_input("Name on Smoothie:")
+
+# Snowflake connection
+cnx = st.connection(
+    "snowflake",
+    account="...",
+    user="...",
+    password="...",
+    role="...",
+    warehouse="...",
+    database="...",
+    schema="..."
 )
 
-name_on_order = st.text_input ('Name on Smoothie:')
-st.write('The name on your Smoothie will be:', name_on_order)
-
-
-from snowflake.snowpark.functions import col
-
-cnx = st.connection("snowflake")
 session = cnx.session()
-my_dataframe = session.table("smoothies.public.fruit_options").select (col ('FRUIT_NAME'))
-# st.dataframe(data=my_dataframe, use_container_width=True)
 
-ingredients_list = st.multiselect( 
-    'Choose up to 5 ingredients:'
-    , my_dataframe
-    , max_selections=5
-    )
+# Fetch fruit list → convert to Python list
+df = session.table("smoothies.public.fruit_options").select(col("FRUIT_NAME"))
+fruit_list = [row["FRUIT_NAME"] for row in df.collect()]
 
-if ingredients_list:
+# Multiselect now works correctly
+ingredients_list = st.multiselect(
+    "Choose up to 5 ingredients:",
+    fruit_list,
+    max_selections=5
+)
 
-    ingredients_string = ''
+# Build insert only when button is pressed
+if st.button("Submit Order"):
 
-    for fruit_chosen in ingredients_list:
-        ingredients_string += fruit_chosen + ' '
+    if not name_on_order:
+        st.error("Please enter a name for your smoothie!")
+        st.stop()
+
+    ingredients_string = " ".join(ingredients_list)
 
     my_insert_stmt = f"""
         INSERT INTO smoothies.public.orders
@@ -38,11 +47,6 @@ if ingredients_list:
         VALUES ('{ingredients_string}', '{name_on_order}')
     """
 
-    if st.button("Submit Order"):
+    session.sql(my_insert_stmt).collect()
 
-        session.sql(my_insert_stmt).collect()
-
-        st.success(
-            f"Your smoothie has been ordered, {name_on_order}!",
-            icon="✅"
-        )
+    st.success(f"Your smoothie has been ordered, {name_on_order}! ✅")
