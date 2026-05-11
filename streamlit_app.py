@@ -8,17 +8,7 @@ st.write("Choose the fruits you want in your custom smoothie!")
 name_on_order = st.text_input("Name on Smoothie:")
 
 # Snowflake connection
-cnx = st.connection(
-    "snowflake",
-    account="...",
-    user="...",
-    password="...",
-    role="...",
-    warehouse="...",
-    database="...",
-    schema="..."
-)
-
+cnx = st.connection("snowflake")
 session = cnx.session()
 
 # Fetch fruit list → convert to Python list
