@@ -1,42 +1,50 @@
 import streamlit as st
+from snowflake.snowpark import Session
 from snowflake.snowpark.functions import col
 
 st.title(":cup_with_straw: Customize Your Smoothie! :cup_with_straw:")
+
 st.write("Choose the fruits you want in your custom smoothie!")
 
-# User input
+# Text input
 name_on_order = st.text_input("Name on Smoothie:")
+st.write("The name on your Smoothie will be:", name_on_order)
 
-# Snowflake connection
-cnx = st.connection("snowflake")
-session = cnx.session()
+# -----------------------------
+# SNOWFLAKE CONNECTION (FIXED)
+# -----------------------------
+conn_params = {
+    "account": st.secrets["snowflake"]["account"],
+    "user": st.secrets["snowflake"]["user"],
+    "password": st.secrets["snowflake"]["password"],
+    "role": st.secrets["snowflake"]["role"],
+    "warehouse": st.secrets["snowflake"]["warehouse"],
+    "database": st.secrets["snowflake"]["database"],
+    "schema": st.secrets["snowflake"]["schema"],
+}
 
-# Fetch fruit list → convert to Python list
+session = Session.builder.configs(conn_params).create()
+
+# Get fruit list
 df = session.table("smoothies.public.fruit_options").select(col("FRUIT_NAME"))
 fruit_list = [row["FRUIT_NAME"] for row in df.collect()]
 
-# Multiselect now works correctly
+# Multiselect (FIXED: must use list, not dataframe)
 ingredients_list = st.multiselect(
     "Choose up to 5 ingredients:",
     fruit_list,
     max_selections=5
 )
 
-# Build insert only when button is pressed
-if st.button("Submit Order"):
+# Build string safely
+if ingredients_list:
+    ingredients_string = ", ".join(ingredients_list)
 
-    if not name_on_order:
-        st.error("Please enter a name for your smoothie!")
-        st.stop()
+    if st.button("Submit Order"):
 
-    ingredients_string = " ".join(ingredients_list)
+        session.sql(f"""
+            INSERT INTO smoothies.public.orders (ingredients, name_on_order)
+            VALUES ('{ingredients_string}', '{name_on_order}')
+        """).collect()
 
-    my_insert_stmt = f"""
-        INSERT INTO smoothies.public.orders
-        (ingredients, name_on_order)
-        VALUES ('{ingredients_string}', '{name_on_order}')
-    """
-
-    session.sql(my_insert_stmt).collect()
-
-    st.success(f"Your smoothie has been ordered, {name_on_order}! ✅")
+        st.success(f"Your smoothie has been ordered, {name_on_order}! ✅")
